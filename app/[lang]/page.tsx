@@ -3,6 +3,7 @@ import { usePathname, useRouter } from "next/navigation"
 import { Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { DrawIoEmbed } from "react-drawio"
 import type { ImperativePanelHandle } from "react-resizable-panels"
+import { toast } from "sonner"
 import ChatPanel from "@/components/chat-panel"
 import {
     ResizableHandle,
@@ -10,8 +11,12 @@ import {
     ResizablePanelGroup,
 } from "@/components/ui/resizable"
 import { useDiagram } from "@/contexts/diagram-context"
+import { isDrawioInitErrorMessage } from "@/lib/drawio-fallback"
 import { type DrawioTheme, isDrawioTheme } from "@/lib/drawio-themes"
 import { i18n, type Locale } from "@/lib/i18n/config"
+
+const DRAWIO_FALLBACK_UI: DrawioTheme = "simple"
+const DRAWIO_LOAD_TIMEOUT_MS = 10_000
 
 export default function Home() {
     const {
@@ -32,12 +37,36 @@ export default function Home() {
     const [isLoaded, setIsLoaded] = useState(false)
     const [isDrawioReady, setIsDrawioReady] = useState(false)
     const [isElectron, setIsElectron] = useState(false)
+    const [fallbackApplied, setFallbackApplied] = useState(false)
+    const [fallbackNotice, setFallbackNotice] = useState<string | null>(null)
     const [drawioBaseUrl, setDrawioBaseUrl] = useState(
         process.env.NEXT_PUBLIC_DRAWIO_BASE_URL || "https://embed.diagrams.net",
     )
 
     const chatPanelRef = useRef<ImperativePanelHandle>(null)
     const isMobileRef = useRef(false)
+
+    const tryDrawioFallback = useCallback(
+        (reason: "timeout" | "error") => {
+            if (fallbackApplied || drawioUi === DRAWIO_FALLBACK_UI) {
+                return
+            }
+
+            const failedUi = drawioUi
+            setFallbackApplied(true)
+            setDrawioUi(DRAWIO_FALLBACK_UI)
+            setIsDrawioReady(false)
+            resetDrawioReady()
+
+            const message =
+                reason === "timeout"
+                    ? `Draw.io UI "${failedUi}" loaded too slowly. Switched to "${DRAWIO_FALLBACK_UI}" automatically.`
+                    : `Draw.io UI "${failedUi}" failed to initialize. Switched to "${DRAWIO_FALLBACK_UI}" automatically.`
+            setFallbackNotice(message)
+            toast.warning(message, { duration: 8000 })
+        },
+        [drawioUi, fallbackApplied, resetDrawioReady],
+    )
 
     // Load preferences from localStorage after mount
     useEffect(() => {
@@ -87,6 +116,7 @@ export default function Home() {
 
     const handleDrawioLoad = useCallback(() => {
         setIsDrawioReady(true)
+        setFallbackNotice(null)
         onDrawioLoad()
     }, [onDrawioLoad])
 
@@ -154,6 +184,51 @@ export default function Home() {
         return () => window.removeEventListener("keydown", handleKeyDown)
     }, [])
 
+    useEffect(() => {
+        if (
+            !isLoaded ||
+            isDrawioReady ||
+            fallbackApplied ||
+            drawioUi === DRAWIO_FALLBACK_UI
+        ) {
+            return
+        }
+
+        const timeout = window.setTimeout(() => {
+            tryDrawioFallback("timeout")
+        }, DRAWIO_LOAD_TIMEOUT_MS)
+
+        return () => {
+            window.clearTimeout(timeout)
+        }
+    }, [drawioUi, fallbackApplied, isDrawioReady, isLoaded, tryDrawioFallback])
+
+    useEffect(() => {
+        if (fallbackApplied || drawioUi === DRAWIO_FALLBACK_UI) {
+            return
+        }
+
+        let expectedOrigin = ""
+        try {
+            expectedOrigin = new URL(drawioBaseUrl, window.location.origin)
+                .origin
+        } catch {
+            expectedOrigin = ""
+        }
+
+        const onMessage = (event: MessageEvent<unknown>) => {
+            if (expectedOrigin && event.origin !== expectedOrigin) {
+                return
+            }
+            if (isDrawioInitErrorMessage(event.data)) {
+                tryDrawioFallback("error")
+            }
+        }
+
+        window.addEventListener("message", onMessage)
+        return () => window.removeEventListener("message", onMessage)
+    }, [drawioBaseUrl, drawioUi, fallbackApplied, tryDrawioFallback])
+
     return (
         <div className="h-screen bg-background relative overflow-hidden">
             <ResizablePanelGroup
@@ -204,9 +279,16 @@ export default function Home() {
                             )}
                             {(!isLoaded || !isDrawioReady) && (
                                 <div className="h-full w-full bg-background flex items-center justify-center">
-                                    <span className="text-muted-foreground">
-                                        Draw.io panel is loading...
-                                    </span>
+                                    <div className="flex flex-col items-center gap-2 px-6 text-center">
+                                        <span className="text-muted-foreground">
+                                            Draw.io panel is loading...
+                                        </span>
+                                        {fallbackNotice && (
+                                            <span className="text-xs text-amber-600 dark:text-amber-500">
+                                                {fallbackNotice}
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
                             )}
                         </div>

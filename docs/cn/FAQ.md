@@ -76,3 +76,13 @@ python -m vllm.entrypoints.openai.api_server \
 - 更新到最新版本（v0.4.9+）
 
 **相关 Issue**: #324, #421, #469
+
+---
+
+## 5. Draw.io 编辑器白屏 / `addGCP3Palette is not a function`
+
+**问题**: 上游 `embed.diagrams.net` 更新后，嵌入式编辑器可能初始化失败，常见报错如 `addGCP3Palette is not a function`。
+
+**当前应用行为**: 如果所选 Draw.io UI 在限定时间内没有触发 `onLoad`（或检测到初始化错误消息），应用会自动重挂载一次并切换到更安全的 UI，避免一直白屏。
+
+**稳定部署建议**: 使用 `NEXT_PUBLIC_DRAWIO_BASE_URL` 指向自托管 Draw.io 并固定版本（见离线部署文档），可减少外部 embed 更新带来的不确定性。

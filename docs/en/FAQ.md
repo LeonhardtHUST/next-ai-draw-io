@@ -76,3 +76,13 @@ python -m vllm.entrypoints.openai.api_server \
 - Update to latest version (v0.4.9+)
 
 **Related Issues**: #324, #421, #469
+
+---
+
+## 5. Draw.io Editor White Screen / `addGCP3Palette is not a function`
+
+**Problem**: The embedded editor may fail to initialize after upstream `embed.diagrams.net` updates, sometimes with errors like `addGCP3Palette is not a function`.
+
+**What the app does now**: If the selected Draw.io UI does not report `onLoad` in time (or an initialization error message is detected), the app automatically remounts Draw.io once with a safer UI to avoid a permanent white screen.
+
+**Recommendation for stable deployments**: Self-host Draw.io and pin your version with `NEXT_PUBLIC_DRAWIO_BASE_URL` (see offline deployment docs). This avoids unexpected breakage caused by external embed updates.
