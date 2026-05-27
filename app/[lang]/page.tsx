@@ -208,16 +208,15 @@ export default function Home() {
             return
         }
 
-        let expectedOrigin = ""
+        let drawioOrigin = ""
         try {
-            expectedOrigin = new URL(drawioBaseUrl, window.location.origin)
-                .origin
+            drawioOrigin = new URL(drawioBaseUrl, window.location.origin).origin
         } catch {
-            expectedOrigin = ""
+            return
         }
 
         const onMessage = (event: MessageEvent<unknown>) => {
-            if (expectedOrigin && event.origin !== expectedOrigin) {
+            if (event.origin !== drawioOrigin) {
                 return
             }
             if (isDrawioInitErrorMessage(event.data)) {

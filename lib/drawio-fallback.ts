@@ -3,6 +3,7 @@ const DRAWIO_INIT_ERROR_PATTERNS = [
     "initpalettes",
     "is not a function",
 ]
+const MAX_FLATTEN_DEPTH = 6
 
 function parseMessageData(data: unknown): unknown {
     if (typeof data !== "string") {
@@ -16,8 +17,12 @@ function parseMessageData(data: unknown): unknown {
     }
 }
 
-function flattenMessageText(data: unknown): string {
-    if (data == null) {
+function flattenMessageText(
+    data: unknown,
+    depth = 0,
+    seen = new WeakSet<object>(),
+): string {
+    if (depth > MAX_FLATTEN_DEPTH || data == null) {
         return ""
     }
 
@@ -29,8 +34,13 @@ function flattenMessageText(data: unknown): string {
         return ""
     }
 
+    if (seen.has(data)) {
+        return ""
+    }
+    seen.add(data)
+
     return Object.values(data as Record<string, unknown>)
-        .map(flattenMessageText)
+        .map((value) => flattenMessageText(value, depth + 1, seen))
         .filter(Boolean)
         .join(" ")
 }
